@@ -1,0 +1,197 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>eSIM 资产与保号看板</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
+    <style>
+        /* 动态背景与毛玻璃 UI 样式 */
+        body {
+            background: linear-gradient(-45deg, #ee7752, #e73c7e, #23a6d5, #23d5ab);
+            background-size: 400% 400%;
+            animation: gradient 15s ease infinite;
+            min-height: 100vh;
+        }
+        @keyframes gradient {
+            0% { background-position: 0% 50%; }
+            50% { background-position: 100% 50%; }
+            100% { background-position: 0% 50%; }
+        }
+        .glass-panel {
+            background: rgba(255, 255, 255, 0.25);
+            backdrop-filter: blur(12px);
+            -webkit-backdrop-filter: blur(12px);
+            border: 1px solid rgba(255, 255, 255, 0.4);
+            box-shadow: 0 8px 32px 0 rgba(31, 38, 135, 0.15);
+        }
+        .glass-card {
+            background: rgba(255, 255, 255, 0.6);
+            backdrop-filter: blur(8px);
+            border: 1px solid rgba(255, 255, 255, 0.5);
+            transition: transform 0.2s ease, box-shadow 0.2s ease;
+        }
+        .glass-card:hover {
+            transform: translateY(-5px);
+            box-shadow: 0 12px 24px rgba(0,0,0,0.1);
+        }
+        .progress-bar-inner {
+            transition: width 1s ease-out;
+        }
+    </style>
+</head>
+<body class="text-gray-800 font-sans p-4 md:p-8">
+
+    <div class="max-w-6xl mx-auto glass-panel rounded-3xl p-6 md:p-10 mt-8">
+        <div class="flex flex-col md:flex-row justify-between items-center mb-10 border-b border-white/50 pb-6">
+            <div>
+                <h1 class="text-3xl md:text-4xl font-extrabold text-gray-900 tracking-tight flex items-center gap-3">
+                    <i class="fa-solid fa-sim-card text-blue-600"></i>
+                    eSIM 资产保号看板
+                </h1>
+                <p class="text-gray-700 mt-2 font-medium">随时监控卡片有效期，自动通过 Telegram 发送 15 天到期提醒。</p>
+            </div>
+            <div class="mt-4 md:mt-0 text-sm bg-white/50 px-4 py-2 rounded-full font-semibold shadow-sm">
+                当前系统时间：<span id="current-date" class="text-blue-700">加载中...</span>
+            </div>
+        </div>
+
+        <div class="grid grid-cols-1 md:grid-cols-3 gap-6 mb-10" id="stats-container">
+            </div>
+
+        <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6" id="esim-container">
+            <div class="col-span-full text-center py-10 text-gray-600 font-medium text-lg" id="loading-text">
+                <i class="fa-solid fa-spinner fa-spin mr-2"></i> 正在从 Cloudflare Worker 获取数据...
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // ==========================================
+        // 关键配置：请将此处的 URL 替换为你的 Cloudflare Worker 的访问地址
+        // 例如：https://my-esim-worker.yourname.workers.dev
+        // ==========================================
+        const WORKER_API_URL = "https://替换为你的.workers.dev";
+
+        // 更新当前时间
+        document.getElementById('current-date').innerText = new Date().toLocaleDateString('zh-CN', { year: 'numeric', month: 'long', day: 'numeric' });
+
+        async function fetchEsimData() {
+            try {
+                const response = await fetch(WORKER_API_URL);
+                if (!response.ok) throw new Error("网络请求失败");
+                const data = await response.json();
+                renderCards(data);
+            } catch (error) {
+                console.error("数据加载失败:", error);
+                document.getElementById('loading-text').innerHTML = `<i class="fa-solid fa-triangle-exclamation text-red-500 mr-2"></i> 数据加载失败，请检查 API 配置跨域或 Worker 地址是否正确。<br><span class="text-sm text-gray-500">（如果是测试环境，请确保已修改代码中的 WORKER_API_URL 变量）</span>`;
+            }
+        }
+
+        function renderCards(esims) {
+            const container = document.getElementById('esim-container');
+            const statsContainer = document.getElementById('stats-container');
+            container.innerHTML = ''; 
+
+            let safeCount = 0;
+            let warningCount = 0;
+            let dangerCount = 0;
+            const today = new Date();
+
+            esims.sort((a, b) => new Date(a.expireDate) - new Date(b.expireDate)); // 按过期时间排序
+
+            esims.forEach(sim => {
+                const expDate = new Date(sim.expireDate);
+                const diffTime = expDate - today;
+                const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+                
+                // 状态判断
+                let statusColor = "bg-green-500";
+                let statusText = "状态安全";
+                let badgeClass = "bg-green-100 text-green-800";
+                let icon = "fa-check-circle text-green-500";
+
+                if (diffDays <= 0) {
+                    statusColor = "bg-gray-500";
+                    statusText = "已过期";
+                    badgeClass = "bg-gray-100 text-gray-800";
+                    icon = "fa-times-circle text-gray-500";
+                    dangerCount++;
+                } else if (diffDays <= 15) {
+                    statusColor = "bg-red-500";
+                    statusText = "即将过期";
+                    badgeClass = "bg-red-100 text-red-800";
+                    icon = "fa-triangle-exclamation text-red-500";
+                    dangerCount++;
+                } else if (diffDays <= 45) {
+                    statusColor = "bg-yellow-400";
+                    statusText = "建议关注";
+                    badgeClass = "bg-yellow-100 text-yellow-800";
+                    icon = "fa-bell text-yellow-500";
+                    warningCount++;
+                } else {
+                    safeCount++;
+                }
+
+                // 进度条百分比计算 (假设 365 天为 100%)
+                let percent = Math.min(Math.max((diffDays / 365) * 100, 0), 100);
+
+                const cardHTML = `
+                    <div class="glass-card rounded-2xl p-6 relative overflow-hidden">
+                        <div class="flex justify-between items-start mb-4">
+                            <div>
+                                <h2 class="text-xl font-bold text-gray-900">${sim.name}</h2>
+                                <p class="text-gray-600 font-mono mt-1 text-sm"><i class="fa-solid fa-phone-alt mr-1 text-gray-400"></i>${sim.number}</p>
+                            </div>
+                            <span class="px-3 py-1 rounded-full text-xs font-bold shadow-sm ${badgeClass}">
+                                <i class="fa-solid ${icon} mr-1"></i>${statusText}
+                            </span>
+                        </div>
+                        
+                        <div class="mt-6">
+                            <div class="flex justify-between text-sm font-semibold mb-2">
+                                <span class="text-gray-700">剩余时间</span>
+                                <span class="text-gray-900 font-bold ${diffDays <= 15 && diffDays > 0 ? 'text-red-600 animate-pulse' : ''}">${diffDays < 0 ? '0' : diffDays} 天</span>
+                            </div>
+                            <div class="w-full bg-gray-200/60 rounded-full h-3 mb-2 shadow-inner">
+                                <div class="${statusColor} h-3 rounded-full progress-bar-inner shadow-sm" style="width: ${percent}%"></div>
+                            </div>
+                            <p class="text-xs text-gray-500 text-right mt-1">到期日: ${sim.expireDate}</p>
+                        </div>
+                    </div>
+                `;
+                container.innerHTML += cardHTML;
+            });
+
+            // 渲染统计数据
+            statsContainer.innerHTML = `
+                <div class="glass-card rounded-2xl p-5 flex items-center justify-between border-l-4 border-l-green-500">
+                    <div>
+                        <p class="text-gray-500 text-sm font-bold uppercase">安全卡片 (>45天)</p>
+                        <p class="text-3xl font-black text-gray-800 mt-1">${safeCount}</p>
+                    </div>
+                    <i class="fa-solid fa-shield-check text-4xl text-green-200"></i>
+                </div>
+                <div class="glass-card rounded-2xl p-5 flex items-center justify-between border-l-4 border-l-yellow-400">
+                    <div>
+                        <p class="text-gray-500 text-sm font-bold uppercase">建议关注 (<45天)</p>
+                        <p class="text-3xl font-black text-gray-800 mt-1">${warningCount}</p>
+                    </div>
+                    <i class="fa-solid fa-clock text-4xl text-yellow-200"></i>
+                </div>
+                <div class="glass-card rounded-2xl p-5 flex items-center justify-between border-l-4 border-l-red-500">
+                    <div>
+                        <p class="text-gray-500 text-sm font-bold uppercase">告警/过期 (<=15天)</p>
+                        <p class="text-3xl font-black text-gray-800 mt-1">${dangerCount}</p>
+                    </div>
+                    <i class="fa-solid fa-siren-on text-4xl text-red-200"></i>
+                </div>
+            `;
+        }
+
+        // 页面加载时执行
+        window.onload = fetchEsimData;
+    </script>
+</body>
+</html>
