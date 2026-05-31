@@ -102,13 +102,13 @@ const HTML_CONTENT = `<!DOCTYPE html>
         </div>
     </div>
 
-    <!-- 添加卡片模态框 -->
+    <!-- 添加/编辑卡片模态框 -->
     <div id="addModal" class="fixed inset-0 bg-black/40 backdrop-blur-sm z-50 hidden flex items-center justify-center p-4">
         <div class="glass-card w-full max-w-md rounded-2xl p-6 shadow-2xl relative transition-all duration-300 transform scale-95 opacity-0" id="modalContent">
             <button onclick="closeModal()" class="absolute top-4 right-4 text-gray-500 hover:text-red-500 text-xl">
                 <i class="fa-solid fa-xmark"></i>
             </button>
-            <h3 class="text-2xl font-bold text-gray-900 mb-6 flex items-center gap-2">
+            <h3 class="text-2xl font-bold text-gray-900 mb-6 flex items-center gap-2" id="modalTitle">
                 <i class="fa-solid fa-file-circle-plus text-blue-600"></i> 新增 eSIM
             </h3>
             
@@ -118,7 +118,7 @@ const HTML_CONTENT = `<!DOCTYPE html>
                     <input type="text" id="simName" required placeholder="例如：KnowRoaming" class="w-full px-4 py-2 rounded-xl border border-gray-300 focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white/80">
                 </div>
                 <div class="mb-4">
-                    <label class="block text-gray-700 text-sm font-bold mb-2">手机号码 (选填)</label>
+                    <label class="block text-gray-700 text-sm font-bold mb-2">手机号码带区号 (选填)</label>
                     <input type="text" id="simNumber" placeholder="例如：+1 234 567 8900" class="w-full px-4 py-2 rounded-xl border border-gray-300 focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white/80">
                 </div>
                 <div class="mb-4">
@@ -141,6 +141,56 @@ const HTML_CONTENT = `<!DOCTYPE html>
         const WORKER_API_URL = "/api/esims";
         let esimData = []; 
         let countdownInterval;
+        let editingId = null; // 用于记录当前正在编辑的卡片ID
+
+        // ================= 国旗字典配置 =================
+        const countryFlags = [
+            { prefix: "+1", flag: "🇺🇸" },   // 美国/加拿大通用
+            { prefix: "+44", flag: "🇬🇧" },  // 英国
+            { prefix: "+86", flag: "🇨🇳" },  // 中国大陆
+            { prefix: "+852", flag: "🇭🇰" }, // 香港
+            { prefix: "+853", flag: "🇲🇴" }, // 澳门
+            { prefix: "+886", flag: "🇹🇼" }, // 台湾
+            { prefix: "+81", flag: "🇯🇵" },  // 日本
+            { prefix: "+82", flag: "🇰🇷" },  // 韩国
+            { prefix: "+65", flag: "🇸🇬" },  // 新加坡
+            { prefix: "+60", flag: "🇲🇾" },  // 马来西亚
+            { prefix: "+61", flag: "🇦🇺" },  // 澳大利亚
+            { prefix: "+64", flag: "🇳🇿" },  // 新西兰
+            { prefix: "+66", flag: "🇹🇭" },  // 泰国
+            { prefix: "+62", flag: "🇮🇩" },  // 印尼
+            { prefix: "+63", flag: "🇵🇭" },  // 菲律宾
+            { prefix: "+84", flag: "🇻🇳" },  // 越南
+            { prefix: "+91", flag: "🇮🇳" },  // 印度
+            { prefix: "+971", flag: "🇦🇪" }, // 阿联酋
+            { prefix: "+33", flag: "🇫🇷" },  // 法国
+            { prefix: "+49", flag: "🇩🇪" },  // 德国
+            { prefix: "+39", flag: "🇮🇹" },  // 意大利
+            { prefix: "+34", flag: "🇪🇸" },  // 西班牙
+            { prefix: "+7", flag: "🇷🇺" },   // 俄罗斯/哈萨克斯坦
+            { prefix: "+380", flag: "🇺🇦" }, // 乌克兰
+            { prefix: "+90", flag: "🇹🇷" },  // 土耳其
+            { prefix: "+55", flag: "🇧🇷" },  // 巴西
+            { prefix: "+52", flag: "🇲🇽" },  // 墨西哥
+            { prefix: "+27", flag: "🇿🇦" },  // 南非
+            { prefix: "+234", flag: "🇳🇬" }  // 尼日利亚
+        ];
+
+        // 智能国旗解析函数
+        function getCountryFlag(numberStr) {
+            if (!numberStr) return "📞"; // 无号码时显示电话图标
+            const cleanNumber = numberStr.replace(/\\s+/g, '');
+            if (!cleanNumber.startsWith("+")) return "🌍"; // 未带区号显示地球
+            
+            // 按区号长度降序排列，确保先匹配 +852 而不是 +8
+            const sortedFlags = countryFlags.sort((a, b) => b.prefix.length - a.prefix.length);
+            for (let item of sortedFlags) {
+                if (cleanNumber.startsWith(item.prefix)) {
+                    return item.flag;
+                }
+            }
+            return "🌍"; // 匹配不到返回地球
+        }
 
         document.getElementById('current-date').innerText = new Date().toLocaleDateString('zh-CN', { month: 'short', day: 'numeric' });
         
@@ -320,10 +370,18 @@ const HTML_CONTENT = `<!DOCTYPE html>
                 }
 
                 let percent = Math.min(Math.max((diffDays / 365) * 100, 0), 100);
+                
+                // 动态获取国旗
+                const flagEmoji = getCountryFlag(sim.number);
 
                 const cardHTML = \`
                     <div class="glass-card rounded-2xl p-6 relative overflow-hidden group">
                         
+                        <!-- 编辑按钮 (Hover时显示) -->
+                        <button onclick="openEditModal('\${sim.id}')" class="absolute top-4 right-24 text-green-500 hover:text-green-700 bg-green-50 hover:bg-green-100 w-8 h-8 rounded-full flex items-center justify-center transition-all opacity-0 group-hover:opacity-100 z-10" title="编辑卡片资料">
+                            <i class="fa-solid fa-pen text-sm"></i>
+                        </button>
+
                         <!-- 一键续期按钮 (Hover时显示) -->
                         <button onclick="renewEsim('\${sim.id}', \${sim.cycle || 0})" class="absolute top-4 right-14 text-blue-500 hover:text-blue-700 bg-blue-50 hover:bg-blue-100 w-8 h-8 rounded-full flex items-center justify-center transition-all opacity-0 group-hover:opacity-100 z-10" title="一键续期（按周期顺延）">
                             <i class="fa-solid fa-rotate-right text-sm"></i>
@@ -334,17 +392,20 @@ const HTML_CONTENT = `<!DOCTYPE html>
                             <i class="fa-solid fa-trash-can text-sm"></i>
                         </button>
 
-                        <div class="flex justify-between items-start mb-4 pr-16">
+                        <div class="flex justify-between items-start mb-4 pr-24">
                             <div>
-                                <h2 class="text-xl font-bold text-gray-900 truncate max-w-[150px] md:max-w-[170px]">\${sim.name}</h2>
-                                <p class="text-gray-600 font-mono mt-1 text-sm"><i class="fa-solid fa-phone-alt mr-1 text-gray-400"></i>\${sim.number || '未登记号码'}</p>
+                                <h2 class="text-xl font-bold text-gray-900 truncate max-w-[140px] md:max-w-[160px]">\${sim.name}</h2>
+                                <p class="text-gray-600 font-mono mt-1 text-sm flex items-center gap-1">
+                                    <span class="text-lg">\${flagEmoji}</span>
+                                    <span>\${sim.number || '未登记号码'}</span>
+                                </p>
                             </div>
-                            <span class="px-3 py-1 rounded-full text-xs font-bold shadow-sm whitespace-nowrap \${badgeClass}">
+                            <span class="px-3 py-1 rounded-full text-xs font-bold shadow-sm whitespace-nowrap \${badgeClass} absolute right-6 top-16 md:static md:right-auto md:top-auto">
                                 <i class="fa-solid \${icon} mr-1"></i>\${statusText}
                             </span>
                         </div>
                         
-                        <div class="mt-6">
+                        <div class="mt-8 md:mt-6">
                             <div class="flex justify-between text-sm font-semibold mb-2">
                                 <span class="text-gray-700">剩余时间</span>
                                 <span class="text-gray-900 font-bold \${diffDays <= 15 && diffDays > 0 ? 'text-red-600 animate-pulse' : ''}">\${diffDays < 0 ? '0' : diffDays} 天</span>
@@ -387,6 +448,7 @@ const HTML_CONTENT = `<!DOCTYPE html>
             \`;
         }
 
+        // 保存或修改数据
         async function submitForm(e) {
             e.preventDefault();
             const btn = document.getElementById('submitBtn');
@@ -400,9 +462,14 @@ const HTML_CONTENT = `<!DOCTYPE html>
                 expireDate: document.getElementById('simExpire').value
             };
 
+            // 如果有 editingId，说明是编辑操作，采用 PUT 方法
+            if (editingId) {
+                payload.id = editingId;
+            }
+
             try {
                 const response = await fetch(WORKER_API_URL, {
-                    method: 'POST',
+                    method: editingId ? 'PUT' : 'POST', // 动态决定方法
                     headers: getAuthHeaders(),
                     body: JSON.stringify(payload)
                 });
@@ -422,9 +489,10 @@ const HTML_CONTENT = `<!DOCTYPE html>
             }
         }
 
+        // 一键续期
         async function renewEsim(id, cycle) {
             if (!cycle || cycle === 0) {
-                alert("该卡片未设置保号周期，无法自动计算日期。请删除后重新添加。");
+                alert("该卡片未设置保号周期，无法自动计算日期。请直接点击编辑修改。");
                 return;
             }
             if (!confirm("确定已保号并一键续期吗？\\n\\n系统将以【今天】为基准，往后顺延 " + cycle + " 天作为新的到期日。")) return;
@@ -440,6 +508,7 @@ const HTML_CONTENT = `<!DOCTYPE html>
                 const response = await fetch(WORKER_API_URL, {
                     method: 'PUT',
                     headers: getAuthHeaders(),
+                    // 仅传需要更新的字段，后端会自动合并
                     body: JSON.stringify({ id: id, expireDate: newExpireStr })
                 });
                 
@@ -454,6 +523,7 @@ const HTML_CONTENT = `<!DOCTYPE html>
             }
         }
 
+        // 删除卡片
         async function deleteEsim(id) {
             if (!confirm("确定要删除这个号码记录吗？")) return;
             
@@ -475,7 +545,10 @@ const HTML_CONTENT = `<!DOCTYPE html>
             }
         }
 
+        // 打开新增弹窗
         function openModal() {
+            editingId = null; // 清空编辑状态
+            document.getElementById('modalTitle').innerHTML = '<i class="fa-solid fa-file-circle-plus text-blue-600"></i> 新增 eSIM';
             const modal = document.getElementById('addModal');
             const content = document.getElementById('modalContent');
             document.getElementById('addForm').reset(); 
@@ -487,6 +560,31 @@ const HTML_CONTENT = `<!DOCTYPE html>
             }, 10);
         }
 
+        // 打开编辑弹窗
+        function openEditModal(id) {
+            const sim = esimData.find(s => s.id === id);
+            if (!sim) return;
+            
+            editingId = id; // 标记正在编辑
+            document.getElementById('modalTitle').innerHTML = '<i class="fa-solid fa-pen-to-square text-green-600"></i> 编辑 eSIM';
+            
+            // 自动填入当前数据
+            document.getElementById('simName').value = sim.name || '';
+            document.getElementById('simNumber').value = sim.number || '';
+            document.getElementById('simCycle').value = sim.cycle || '';
+            document.getElementById('simExpire').value = sim.expireDate || '';
+
+            const modal = document.getElementById('addModal');
+            const content = document.getElementById('modalContent');
+            
+            modal.classList.remove('hidden');
+            setTimeout(() => {
+                content.classList.remove('scale-95', 'opacity-0');
+                content.classList.add('scale-100', 'opacity-100');
+            }, 10);
+        }
+
+        // 关闭弹窗
         function closeModal() {
             const modal = document.getElementById('addModal');
             const content = document.getElementById('modalContent');
@@ -496,6 +594,7 @@ const HTML_CONTENT = `<!DOCTYPE html>
             
             setTimeout(() => {
                 modal.classList.add('hidden');
+                editingId = null; // 恢复状态
             }, 300); 
         }
     </script>
@@ -528,7 +627,7 @@ export default {
     }
 
     // ==========================================
-    // 💡 终极修复：优先从环境变量读，读不到就从 KV 数据库读
+    // 💡 优先从环境变量读，读不到就从 KV 数据库读
     // ==========================================
     let tgToken = env.TG_BOT_TOKEN;
     let tgChat = env.TG_CHAT_ID;
@@ -630,7 +729,7 @@ export default {
         return new Response(JSON.stringify({ error: "Unauthorized: Invalid or Expired Token" }), { status: 401, headers: corsHeaders });
       }
 
-      // ========= 以下为原有的正常数据操作流程 =========
+      // ========= 以下为正常的增删改查数据操作流程 =========
       let esims;
       try {
         esims = await env.ESIM_DB.get("esim_list", { type: "json" });
@@ -656,13 +755,21 @@ export default {
         } catch (err) { return new Response(JSON.stringify({ success: false }), { status: 400, headers: corsHeaders }); }
       }
 
-      // PUT 一键续期
+      // PUT 更新 (处理全局编辑与部分字段更新)
       if (request.method === "PUT") {
         try {
-          const { id, expireDate } = await request.json();
+          const { id, expireDate, name, number, cycle } = await request.json();
           let found = false;
           esims = esims.map(sim => {
-            if (sim.id === id) { found = true; return { ...sim, expireDate }; }
+            if (sim.id === id) { 
+                found = true; 
+                // 仅更新传入的有值的字段，确保一键续期和全量编辑复用同一个接口
+                if (expireDate !== undefined) sim.expireDate = expireDate;
+                if (name !== undefined) sim.name = name;
+                if (number !== undefined) sim.number = number;
+                if (cycle !== undefined) sim.cycle = cycle;
+                return sim; 
+            }
             return sim;
           });
           if (!found) return new Response(JSON.stringify({ success: false, message: "未找到记录" }), { status: 404, headers: corsHeaders });
