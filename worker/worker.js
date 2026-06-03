@@ -127,6 +127,10 @@ const HTML_CONTENT = `<!DOCTYPE html>
                     <input type="number" id="simCycle" required placeholder="例如：180" class="w-full px-4 py-2 rounded-xl border border-gray-300 focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white/80">
                 </div>
                 <div class="mb-4">
+                    <label class="block text-gray-700 text-sm font-bold mb-2">已注册平台 (选填，用逗号或空格分隔)</label>
+                    <input type="text" id="simPlatforms" placeholder="例如：Telegram, Google, ChatGPT" class="w-full px-4 py-2 rounded-xl border border-gray-300 focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white/80">
+                </div>
+                <div class="mb-4">
                     <label class="block text-gray-700 text-sm font-bold mb-2">备注 / 保号要求 (选填)</label>
                     <input type="text" id="simRemark" placeholder="例如：发送短信到某号码 或 充值5元" class="w-full px-4 py-2 rounded-xl border border-gray-300 focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white/80">
                 </div>
@@ -403,7 +407,20 @@ const HTML_CONTENT = `<!DOCTYPE html>
                 const flagEmoji = getCountryFlag(sim.number);
                 
                 // 渲染备注区域
-                const remarkHTML = sim.remark ? \`<div class="bg-blue-50/60 rounded-lg p-2.5 mb-4 text-xs text-gray-700 border border-blue-100/60 break-words leading-relaxed"><i class="fa-regular fa-comment-dots mr-1.5 text-blue-400"></i>\${sim.remark}</div>\` : '';
+                const remarkHTML = sim.remark ? \`<div class="bg-blue-50/60 rounded-lg p-2.5 mb-3 text-xs text-gray-700 border border-blue-100/60 break-words leading-relaxed"><i class="fa-regular fa-comment-dots mr-1.5 text-blue-400"></i>\${sim.remark}</div>\` : '';
+
+                // 渲染已注册平台区域 (将字符串切割并转化为美观的标签)
+                let platformsHTML = '';
+                if (sim.platforms && sim.platforms.trim() !== '') {
+                    // 支持逗号、全角逗号或空格分割
+                    const pList = sim.platforms.split(/[,，\\s]+/).filter(p => p.trim() !== '');
+                    if (pList.length > 0) {
+                        const badges = pList.map(p => \`<span class="inline-flex items-center px-2 py-1 rounded-md text-[10px] font-semibold bg-indigo-50 text-indigo-600 border border-indigo-100 shadow-sm whitespace-nowrap mb-1.5 mr-1.5"><i class="fa-solid fa-hashtag mr-1 opacity-60"></i>\${p}</span>\`).join('');
+                        platformsHTML = \`<div class="mb-3">
+                            <div class="flex flex-wrap">\${badges}</div>
+                        </div>\`;
+                    }
+                }
 
                 const cardHTML = \`
                     <div class="glass-card rounded-2xl p-6 relative overflow-hidden group flex flex-col h-full">
@@ -440,6 +457,9 @@ const HTML_CONTENT = `<!DOCTYPE html>
                         
                         <!-- 备注/保号要求区域 -->
                         \${remarkHTML}
+
+                        <!-- 已注册平台标签区域 -->
+                        \${platformsHTML}
                         
                         <!-- 底部进度条区域：固定靠底 -->
                         <div class="mt-auto">
@@ -495,6 +515,7 @@ const HTML_CONTENT = `<!DOCTYPE html>
                 name: document.getElementById('simName').value,
                 number: document.getElementById('simNumber').value,
                 cycle: parseInt(document.getElementById('simCycle').value) || 0,
+                platforms: document.getElementById('simPlatforms').value, // 新增平台数据
                 remark: document.getElementById('simRemark').value,
                 expireDate: document.getElementById('simExpire').value
             };
@@ -602,6 +623,7 @@ const HTML_CONTENT = `<!DOCTYPE html>
             document.getElementById('simName').value = sim.name || '';
             document.getElementById('simNumber').value = sim.number || '';
             document.getElementById('simCycle').value = sim.cycle || '';
+            document.getElementById('simPlatforms').value = sim.platforms || ''; // 填充平台数据
             document.getElementById('simRemark').value = sim.remark || '';
             document.getElementById('simExpire').value = sim.expireDate || '';
 
@@ -765,7 +787,7 @@ export default {
 
       if (request.method === "PUT") {
         try {
-          const { id, expireDate, name, number, cycle, remark } = await request.json();
+          const { id, expireDate, name, number, cycle, remark, platforms } = await request.json();
           let found = false;
           esims = esims.map(sim => {
             if (sim.id === id) { 
@@ -774,7 +796,8 @@ export default {
                 if (name !== undefined) sim.name = name;
                 if (number !== undefined) sim.number = number;
                 if (cycle !== undefined) sim.cycle = cycle;
-                if (remark !== undefined) sim.remark = remark; // 新增备注保存
+                if (remark !== undefined) sim.remark = remark;
+                if (platforms !== undefined) sim.platforms = platforms; // 更新平台数据
                 return sim; 
             }
             return sim;
@@ -824,14 +847,15 @@ export default {
       const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
       
       const cycleText = sim.cycle ? `${sim.cycle}天` : '未设置';
-      const remarkText = sim.remark ? `\n📝 备注: ${sim.remark}` : ''; // 推送消息中加入备注
+      const remarkText = sim.remark ? `\n📝 备注: ${sim.remark}` : ''; 
+      const platformsText = sim.platforms ? `\n🌐 平台: ${sim.platforms}` : ''; // 推送消息中加入平台
 
       if (diffDays <= 15 && diffDays > 0) {
-        messages.push(`⚠️ 【eSIM 保号提醒】\n📱 卡名: ${sim.name}\n📞 号码: ${sim.number || '未填写'}\n🔄 周期: ${cycleText}\n📅 到期: ${sim.expireDate}${remarkText}\n⏳ 剩余: ${diffDays} 天！\n👉 请尽快处理续期！`);
+        messages.push(`⚠️ 【eSIM 保号提醒】\n📱 卡名: ${sim.name}\n📞 号码: ${sim.number || '未填写'}\n🔄 周期: ${cycleText}\n📅 到期: ${sim.expireDate}${remarkText}${platformsText}\n⏳ 剩余: ${diffDays} 天！\n👉 请尽快处理续期！`);
       } else if (diffDays === 0) {
-        messages.push(`🚨 【eSIM 紧急提醒】\n📱 卡名: ${sim.name} 今天到期！${remarkText}`);
+        messages.push(`🚨 【eSIM 紧急提醒】\n📱 卡名: ${sim.name} 今天到期！${remarkText}${platformsText}`);
       } else if (diffDays < 0 && Math.abs(diffDays) % 7 === 0) {
-        messages.push(`❌ 【eSIM 停机警告】\n📱 卡名: ${sim.name} 已过期 ${Math.abs(diffDays)} 天。${remarkText}`);
+        messages.push(`❌ 【eSIM 停机警告】\n📱 卡名: ${sim.name} 已过期 ${Math.abs(diffDays)} 天。${remarkText}${platformsText}`);
       }
     });
 
