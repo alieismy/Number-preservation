@@ -43,7 +43,6 @@ const HTML_CONTENT = `<!DOCTYPE html>
 </head>
 <body class="text-gray-800 font-sans p-4 md:p-8 relative">
 
-    <!-- 登录界面 (默认显示，未授权时拦截) -->
     <div id="login-container" class="max-w-md mx-auto glass-panel rounded-3xl p-8 md:p-10 mt-16 md:mt-32 text-center transition-all">
         <div class="w-20 h-20 bg-white/50 rounded-full flex items-center justify-center mx-auto mb-6 shadow-sm">
             <i class="fa-solid fa-shield-halved text-4xl text-blue-600"></i>
@@ -65,9 +64,7 @@ const HTML_CONTENT = `<!DOCTYPE html>
         </div>
     </div>
 
-    <!-- 主界面容器 (默认隐藏，登录成功后显示) -->
     <div id="main-container" class="max-w-6xl mx-auto glass-panel rounded-3xl p-6 md:p-10 mt-4 md:mt-8 hidden">
-        <!-- 头部信息 -->
         <div class="flex flex-col md:flex-row justify-between items-center mb-10 border-b border-white/50 pb-6 gap-4">
             <div>
                 <h1 class="text-3xl md:text-4xl font-extrabold text-gray-900 tracking-tight flex items-center gap-3">
@@ -89,12 +86,9 @@ const HTML_CONTENT = `<!DOCTYPE html>
             </div>
         </div>
 
-        <!-- 状态统计 -->
         <div class="grid grid-cols-1 md:grid-cols-3 gap-6 mb-10" id="stats-container">
-            <!-- JS 动态注入 -->
-        </div>
+            </div>
 
-        <!-- 卡片列表容器 -->
         <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6" id="esim-container">
             <div class="col-span-full text-center py-10 text-gray-700 font-medium text-lg" id="loading-text">
                 <i class="fa-solid fa-spinner fa-spin mr-2"></i> 正在读取数据...
@@ -102,9 +96,7 @@ const HTML_CONTENT = `<!DOCTYPE html>
         </div>
     </div>
 
-    <!-- 添加/编辑卡片模态框 -->
     <div id="addModal" class="fixed inset-0 bg-black/40 backdrop-blur-sm z-50 hidden flex items-center justify-center p-4">
-        <!-- 增加了 max-h-screen 和 overflow-y-auto 以防止屏幕较小时内容被遮挡 -->
         <div class="glass-card w-full max-w-md rounded-2xl p-6 shadow-2xl relative transition-all duration-300 transform scale-95 opacity-0 max-h-[95vh] overflow-y-auto" id="modalContent">
             <button onclick="closeModal()" class="absolute top-4 right-4 text-gray-500 hover:text-red-500 text-xl">
                 <i class="fa-solid fa-xmark"></i>
@@ -142,6 +134,25 @@ const HTML_CONTENT = `<!DOCTYPE html>
                     保存并监控
                 </button>
             </form>
+        </div>
+    </div>
+
+    <div id="confirmModal" class="fixed inset-0 bg-black/40 backdrop-blur-sm z-50 hidden flex items-center justify-center p-4">
+        <div class="glass-card w-full max-w-sm rounded-2xl p-6 shadow-2xl relative transition-all duration-300 transform scale-95 opacity-0 text-center" id="confirmModalContent">
+            <div class="w-16 h-16 rounded-full flex items-center justify-center mx-auto mb-4 shadow-sm" id="confirmIconBg">
+                <i class="fa-solid fa-triangle-exclamation text-3xl" id="confirmIcon"></i>
+            </div>
+            <h3 class="text-xl font-bold text-gray-900 mb-2" id="confirmTitle">确认操作</h3>
+            <p class="text-gray-600 mb-6 text-sm whitespace-pre-line" id="confirmMessage">确定要执行此操作吗？</p>
+            
+            <div class="flex gap-4 w-full">
+                <button onclick="closeConfirmModal()" class="flex-1 bg-white/60 hover:bg-white/80 text-gray-700 font-bold py-3 px-4 rounded-xl border border-gray-200/50 shadow-sm transition-colors">
+                    取消
+                </button>
+                <button id="confirmActionBtn" class="flex-1 font-bold py-3 px-4 rounded-xl shadow-md transition-colors flex items-center justify-center gap-2">
+                    确定
+                </button>
+            </div>
         </div>
     </div>
 
@@ -425,7 +436,6 @@ const HTML_CONTENT = `<!DOCTYPE html>
                 const cardHTML = \`
                     <div class="glass-card rounded-2xl p-6 relative overflow-hidden group flex flex-col h-full">
                         
-                        <!-- 操作按钮组：使用 flex 排列，移动端常显，PC端悬浮，绝对安全无重叠 -->
                         <div class="absolute top-4 right-4 flex gap-1.5 opacity-100 lg:opacity-0 lg:group-hover:opacity-100 transition-all duration-300 z-20 bg-white/80 p-1.5 rounded-full backdrop-blur-md border border-white/60 shadow-sm">
                             <button onclick="openEditModal('\${sim.id}')" class="text-green-600 hover:text-white hover:bg-green-500 bg-white w-8 h-8 rounded-full flex items-center justify-center transition-colors shadow-sm" title="编辑卡片资料">
                                 <i class="fa-solid fa-pen text-sm"></i>
@@ -438,30 +448,24 @@ const HTML_CONTENT = `<!DOCTYPE html>
                             </button>
                         </div>
 
-                        <!-- 标题区域：强制预留右侧 112px 宽度给按钮，超长自动 ... 省略 -->
                         <div class="pr-28 mb-3">
                             <h2 class="text-xl font-bold text-gray-900 truncate" title="\${sim.name}">\${sim.name}</h2>
                         </div>
                         
-                        <!-- 号码与状态区域：错层排列，灵活挤压防重叠 -->
                         <div class="flex justify-between items-center mb-4 gap-2">
                             <p class="text-gray-600 font-mono text-sm flex items-center gap-1.5 truncate">
                                 <span class="text-lg">\${flagEmoji}</span>
                                 <span class="truncate">\${sim.number || '未登记号码'}</span>
                             </p>
-                            <!-- 状态标签加入 flex-shrink-0 绝对防挤压变形 -->
                             <span class="px-2.5 py-1 rounded-full text-[11px] font-bold shadow-sm whitespace-nowrap flex-shrink-0 \${badgeClass}">
                                 <i class="fa-solid \${icon} mr-1"></i>\${statusText}
                             </span>
                         </div>
                         
-                        <!-- 备注/保号要求区域 -->
                         \${remarkHTML}
 
-                        <!-- 已注册平台标签区域 -->
                         \${platformsHTML}
                         
-                        <!-- 底部进度条区域：固定靠底 -->
                         <div class="mt-auto">
                             <div class="flex justify-between text-sm font-semibold mb-2">
                                 <span class="text-gray-700">剩余时间</span>
@@ -546,57 +550,139 @@ const HTML_CONTENT = `<!DOCTYPE html>
             }
         }
 
-        async function renewEsim(id, cycle) {
+        // ================= 统一确认弹窗功能 =================
+        function openConfirmModal(options) {
+            document.getElementById('confirmTitle').innerText = options.title || '确认操作';
+            document.getElementById('confirmMessage').innerText = options.message || '确定要执行此操作吗？';
+            
+            const btn = document.getElementById('confirmActionBtn');
+            btn.innerHTML = options.btnText || '确定';
+            btn.className = "flex-1 font-bold py-3 px-4 rounded-xl shadow-md transition-colors flex items-center justify-center gap-2 " + (options.btnClass || "bg-red-500 hover:bg-red-600 text-white shadow-red-500/30");
+            
+            const iconBg = document.getElementById('confirmIconBg');
+            iconBg.className = "w-16 h-16 rounded-full flex items-center justify-center mx-auto mb-4 shadow-sm " + (options.iconBgClass || "bg-red-50/80 border border-red-100");
+            
+            const icon = document.getElementById('confirmIcon');
+            icon.className = "fa-solid " + (options.iconClass || "fa-triangle-exclamation text-3xl text-red-500");
+
+            // 绑定确认事件
+            btn.onclick = async () => {
+                if (options.onConfirm) {
+                    await options.onConfirm();
+                }
+            };
+
+            const modal = document.getElementById('confirmModal');
+            const content = document.getElementById('confirmModalContent');
+            
+            modal.classList.remove('hidden');
+            setTimeout(() => {
+                content.classList.remove('scale-95', 'opacity-0');
+                content.classList.add('scale-100', 'opacity-100');
+            }, 10);
+        }
+
+        function closeConfirmModal() {
+            const modal = document.getElementById('confirmModal');
+            const content = document.getElementById('confirmModalContent');
+            
+            content.classList.remove('scale-100', 'opacity-100');
+            content.classList.add('scale-95', 'opacity-0');
+            
+            setTimeout(() => {
+                modal.classList.add('hidden');
+            }, 300); 
+        }
+
+        // ================= 重构后的续期与删除功能 =================
+        function renewEsim(id, cycle) {
             if (!cycle || cycle === 0) {
                 alert("该卡片未设置保号周期，无法自动计算日期。请直接点击编辑修改。");
                 return;
             }
-            if (!confirm("确定已保号并一键续期吗？\\n\\n系统将以【今天】为基准，往后顺延 " + cycle + " 天作为新的到期日。")) return;
             
-            const newDate = new Date();
-            newDate.setDate(newDate.getDate() + parseInt(cycle));
-            const year = newDate.getFullYear();
-            const month = String(newDate.getMonth() + 1).padStart(2, '0');
-            const day = String(newDate.getDate()).padStart(2, '0');
-            const newExpireStr = year + '-' + month + '-' + day;
+            openConfirmModal({
+                title: '一键续期',
+                message: '确定已保号并一键续期吗？\\n\\n系统将以【今天】为基准，往后顺延 ' + cycle + ' 天作为新的到期日。',
+                btnText: '<i class="fa-solid fa-rotate-right"></i> 确定续期',
+                btnClass: 'bg-blue-600 hover:bg-blue-700 text-white shadow-blue-500/30',
+                iconBgClass: 'bg-blue-50/80 border border-blue-100',
+                iconClass: 'fa-rotate-right text-3xl text-blue-500',
+                onConfirm: async () => {
+                    const btn = document.getElementById('confirmActionBtn');
+                    const origText = btn.innerHTML;
+                    btn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> 处理中...';
+                    btn.disabled = true;
 
-            try {
-                const response = await fetch(WORKER_API_URL, {
-                    method: 'PUT',
-                    headers: getAuthHeaders(),
-                    body: JSON.stringify({ id: id, expireDate: newExpireStr })
-                });
-                
-                if (response.status === 401) { logout(); return; }
-                if (response.ok) {
-                    await fetchEsimData(); 
-                } else {
-                    alert("续期失败。");
+                    const newDate = new Date();
+                    newDate.setDate(newDate.getDate() + parseInt(cycle));
+                    const year = newDate.getFullYear();
+                    const month = String(newDate.getMonth() + 1).padStart(2, '0');
+                    const day = String(newDate.getDate()).padStart(2, '0');
+                    const newExpireStr = year + '-' + month + '-' + day;
+
+                    try {
+                        const response = await fetch(WORKER_API_URL, {
+                            method: 'PUT',
+                            headers: getAuthHeaders(),
+                            body: JSON.stringify({ id: id, expireDate: newExpireStr })
+                        });
+                        
+                        if (response.status === 401) { logout(); return; }
+                        if (response.ok) {
+                            closeConfirmModal();
+                            await fetchEsimData(); 
+                        } else {
+                            alert("续期失败。");
+                            btn.innerHTML = origText;
+                            btn.disabled = false;
+                        }
+                    } catch (error) {
+                        alert("网络错误，续期失败。");
+                        btn.innerHTML = origText;
+                        btn.disabled = false;
+                    }
                 }
-            } catch (error) {
-                alert("网络错误，续期失败。");
-            }
+            });
         }
 
-        async function deleteEsim(id) {
-            if (!confirm("确定要删除这个号码记录吗？")) return;
-            
-            try {
-                const response = await fetch(WORKER_API_URL, {
-                    method: 'DELETE',
-                    headers: getAuthHeaders(),
-                    body: JSON.stringify({ id: id })
-                });
-                
-                if (response.status === 401) { logout(); return; }
-                if (response.ok) {
-                    await fetchEsimData(); 
-                } else {
-                    alert("删除失败。");
+        function deleteEsim(id) {
+            openConfirmModal({
+                title: '确认删除',
+                message: '确定要删除这个号码记录吗？此操作无法恢复。',
+                btnText: '<i class="fa-solid fa-trash-can"></i> 确定删除',
+                btnClass: 'bg-red-500 hover:bg-red-600 text-white shadow-red-500/30',
+                iconBgClass: 'bg-red-50/80 border border-red-100',
+                iconClass: 'fa-trash-can text-3xl text-red-500',
+                onConfirm: async () => {
+                    const btn = document.getElementById('confirmActionBtn');
+                    const origText = btn.innerHTML;
+                    btn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> 删除中...';
+                    btn.disabled = true;
+                    
+                    try {
+                        const response = await fetch(WORKER_API_URL, {
+                            method: 'DELETE',
+                            headers: getAuthHeaders(),
+                            body: JSON.stringify({ id: id })
+                        });
+                        
+                        if (response.status === 401) { logout(); return; }
+                        if (response.ok) {
+                            closeConfirmModal();
+                            await fetchEsimData(); 
+                        } else {
+                            alert("删除失败。");
+                            btn.innerHTML = origText;
+                            btn.disabled = false;
+                        }
+                    } catch (error) {
+                        alert("网络错误，删除失败。");
+                        btn.innerHTML = origText;
+                        btn.disabled = false;
+                    }
                 }
-            } catch (error) {
-                alert("网络错误，删除失败。");
-            }
+            });
         }
 
         function openModal() {
