@@ -16,6 +16,6 @@ enabled = true
 crons = ["0 2 * * *"]
 
 # 自动绑定 KV 数据库
-#[[kv_namespaces]]
-#binding = "KV"
-#id = "c561ed7676ed41f8834fcaddb8c08a6c"
+[[kv_namespaces]]
+binding = "number-preservation"
+id = "c561ed7676ed41f8834fcaddb8c08a6c"
