@@ -18,4 +18,4 @@ crons = ["0 2 * * *"]
 # 自动绑定 KV 数据库
 [[kv_namespaces]]
 binding = "KV"
-id = "c561ed7676ed41f8834fcaddb8c08a6c"
+id = "69c7629c015a408dacf97f85cf07b681"
